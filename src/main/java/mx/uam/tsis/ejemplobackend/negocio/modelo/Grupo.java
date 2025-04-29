@@ -20,6 +20,7 @@ public class Grupo {
 	@GeneratedValue // Autogenera un ID único
 	private Integer id;
 	
+	
 	@NotBlank
 	private String clave;
 	
