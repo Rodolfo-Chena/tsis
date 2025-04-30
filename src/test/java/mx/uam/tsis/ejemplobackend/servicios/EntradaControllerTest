@@ -1,0 +1,80 @@
+package mx.uam.tsis.ejemplobackend.servicios;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import mx.uam.tsis.ejemplobackend.negocio.EntradaService;
+import mx.uam.tsis.ejemplobackend.negocio.modelo.Entrada;
+import mx.uam.tsis.ejemplobackend.negocio.modelo.TipoEntrada;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(EntradaController.class)
+public class EntradaControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private EntradaService entradaService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Test
+    public void testSeleccionarEntradas_success() throws Exception {
+        // Datos simulados
+        Entrada entrada1 = new Entrada();
+        entrada1.setId(1L);
+        entrada1.setTipo(TipoEntrada.GENERAL);
+        entrada1.setAsiento("A1");
+        entrada1.setFecha(LocalDateTime.parse("2025-05-01T18:00:00"));
+        entrada1.setPrecio(100.0);
+
+        List<Entrada> entradasSimuladas = List.of(entrada1);
+
+        when(entradaService.seleccionarEntradas(any(), anyInt(), any())).thenReturn(entradasSimuladas);
+        when(entradaService.calcularPrecioTotal(any())).thenReturn(100.0);
+
+        mockMvc.perform(post("/v1/entradas/seleccionar")
+                .param("tipo", "GENERAL")
+                .param("cantidad", "1")
+                .param("fecha", "2025-05-01T18:00:00")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entradas[0].asiento").value("A1"))
+                .andExpect(jsonPath("$.precioTotal").value(100.0));
+    }
+
+    @Test
+    public void testSeleccionarEntradas_formatoFechaInvalido() throws Exception {
+        mockMvc.perform(post("/v1/entradas/seleccionar")
+                .param("tipo", "GENERAL")
+                .param("cantidad", "1")
+                .param("fecha", "01/05/2025 18:00")) // formato incorrecto
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Formato de fecha inválido (usar yyyy-MM-ddTHH:mm)"));
+    }
+
+    @Test
+    public void testSeleccionarEntradas_sinDisponibilidad() throws Exception {
+        when(entradaService.seleccionarEntradas(any(), anyInt(), any())).thenReturn(null);
+
+        mockMvc.perform(post("/v1/entradas/seleccionar")
+                .param("tipo", "GENERAL")
+                .param("cantidad", "5")
+                .param("fecha", "2025-05-01T18:00:00"))
+                .andExpect(status().isConflict())
+                .andExpect(content().string("No hay suficientes entradas disponibles"));
+    }
+}
